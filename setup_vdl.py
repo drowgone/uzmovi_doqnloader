@@ -23,40 +23,55 @@ def check_ffmpeg():
     return shutil.which("ffmpeg") is not None
 
 def install_packages():
-    """Pip orqali kerakli kutubxonalarni o'rnatish"""
+    """Pip orqali kerakli kutubxonalarni o'rnatish (Virtual Environment ichida)"""
     print("--- 1. Kutubxonalarni tekshirish va o'rnatish ---")
     
-    # Pip mavjudligini tekshirish
-    try:
-        import pip
-    except ImportError:
-        print("[!] XATOLIK: Tizimda 'pip' moduli topilmadi.")
-        if is_windows():
-            print("    -> Windowsda: Pythonni qayta o'rnating va 'Add to PATH' belgisini qo'ying.")
-        elif is_termux():
-            print("    -> Termuxda: pkg install python")
-        else:
-            print("    -> Linuxda: sudo apt install python3-pip")
+    script_dir = os.path.dirname(os.path.realpath(__file__))
+    venv_dir = os.path.join(script_dir, ".venv")
+    
+    # 1.1 Venv yaratish
+    if not os.path.exists(venv_dir):
+        print("[*] Virtual muhit (.venv) yaratilmoqda...")
+        try:
+            subprocess.check_call([sys.executable, "-m", "venv", venv_dir])
+            print("[+] .venv yaratildi.")
+        except Exception as e:
+            print(f"[!] Xatolik: Virtual muhitni yaratib bo'lmadi: {e}")
+            if not is_windows() and not is_termux():
+                print("    -> Linuxda buni sinab ko'ring: sudo apt install python3-venv")
+            return False
+
+    # 1.2 Venv python va pip yo'lini aniqlash
+    if is_windows():
+        venv_python = os.path.join(venv_dir, "Scripts", "python.exe")
+    else:
+        venv_python = os.path.join(venv_dir, "bin", "python3")
+
+    if not os.path.exists(venv_python):
+        print(f"[!] Xatolik: Venv python topilmadi: {venv_python}")
         return False
 
     try:
-        # pip orqali o'rnatish
+        # venv ichidagi pip orqali o'rnatish
         print(f"[*] {', '.join(REQUIRED_PACKAGES)} o'rnatilmoqda...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-U"] + REQUIRED_PACKAGES)
+        # Upgrade pip inside venv first
+        subprocess.check_call([venv_python, "-m", "pip", "install", "--upgrade", "pip"])
+        subprocess.check_call([venv_python, "-m", "pip", "install", "-U"] + REQUIRED_PACKAGES)
         print("[+] Kutubxonalar muvaffaqiyatli tayyorlandi.\n")
-        return True
+        return venv_python
     except Exception as e:
         print(f"[!] Xatolik: Kutubxonalarni o'rnatib bo'lmadi: {e}")
         return False
 
 def main():
     print("="*60)
-    print("🎬 VDL (Universal Video Downloader) - Universal Setup")
+    print("🎬 VDL (Universal Video Downloader) - Universal Setup & Venv")
     print("="*60)
     print(f"Tizim: {get_os_name()}")
     
-    # 1. Install pip packages
-    if not install_packages():
+    # 1. Install pip packages in venv
+    venv_python = install_packages()
+    if not venv_python:
         sys.exit(1)
 
     # 2. Check FFmpeg
@@ -80,7 +95,8 @@ def main():
         sys.path.append(script_dir)
         import uzmovi_dl
         
-        if uzmovi_dl.install_kino():
+        # O'rnatishda venv python manzilini ko'rsatamiz
+        if uzmovi_dl.install_kino(venv_python=venv_python):
             print(f"[+] Integratsiya yakunlandi ({get_os_name()}).")
         else:
             print("[!] Integratsiya jarayonida ogohlantirish (Manual setup talab qilinishi mumkin).")
@@ -92,10 +108,10 @@ def main():
     print("Endi terminalda 'kino' deb yozib dasturni ishga tushirishingiz mumkin.")
     print("="*60 + "\n")
 
-    # 4. Run the app
+    # 4. Run the app using the venv python
     try:
-        import uzmovi_dl
-        uzmovi_dl.run_app()
+        cmd = [venv_python, os.path.join(script_dir, "uzmovi_dl.py")]
+        subprocess.run(cmd)
     except KeyboardInterrupt:
         pass
     except Exception as e:

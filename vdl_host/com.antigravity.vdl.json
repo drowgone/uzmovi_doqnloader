@@ -1,7 +1,7 @@
 {
   "name": "com.antigravity.vdl",
   "description": "VDL Native Messaging Host",
-  "path": "HOST_PATH_PLACEHOLDER",
+  "path": "/home/donegrow/Documents/vdl/vdl_host/vdl_host_wrapper.sh",
   "type": "stdio",
   "allowed_origins": [
     "chrome-extension://hpheifbhhofhopbodnhdjmpemjgaaehe/"

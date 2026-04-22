@@ -400,7 +400,7 @@ def is_installed():
         link_path = os.path.expanduser("~/.local/bin/kino")
     return os.path.exists(link_path)
 
-def install_chrome_bridge():
+def install_chrome_bridge(python_exe=None):
     """Chrome uchun Native Messaging Host'ni avtomatik sozlash"""
     script_dir = os.path.dirname(os.path.realpath(__file__))
     host_json_path = os.path.join(script_dir, "vdl_host", "com.antigravity.vdl.json")
@@ -418,13 +418,24 @@ def install_chrome_bridge():
         # OS ga qarab host yo'lini aniqlash
         host_script_path = os.path.join(script_dir, "vdl_host", "vdl_host.py")
         
+        # Python interpreterini aniqlash (agar berilmagan bo'lsa)
+        if not python_exe:
+            python_exe = sys.executable
+            venv_python = os.path.join(script_dir, ".venv", "Scripts", "python.exe") if IS_WINDOWS else os.path.join(script_dir, ".venv", "bin", "python3")
+            if os.path.exists(venv_python):
+                python_exe = venv_python
+
         if IS_WINDOWS:
             # Windowsda .bat wrapper yaratamiz, chunki Chrome .py ni to'g'ridan-to'g'ri ishga tushirishi qiyin
             host_cmd_path = os.path.join(script_dir, "vdl_host", "vdl_host.bat")
             with open(host_cmd_path, 'w') as f:
-                f.write(f'@echo off\n"{sys.executable}" "{host_script_path}" %*')
+                f.write(f'@echo off\n"{python_exe}" "{host_script_path}" %*')
         else:
-            host_cmd_path = host_script_path
+            # Linuxda ham wrapper orqali venv pythonni ishlatamiz
+            host_cmd_path = os.path.join(script_dir, "vdl_host", "vdl_host_wrapper.sh")
+            with open(host_cmd_path, 'w') as f:
+                f.write(f'#!/bin/bash\n"{python_exe}" "{host_script_path}" "$@"')
+            os.chmod(host_cmd_path, 0o755)
             os.chmod(host_script_path, 0o755)
 
         manifest["path"] = host_cmd_path
@@ -466,6 +477,10 @@ def install_chrome_bridge():
         ]
         
         try:
+            # Source manifestni ham yangilab qo'yamiz
+            with open(host_json_path, 'w') as f:
+                json.dump(manifest, f, indent=2)
+
             for p in paths:
                 os.makedirs(p, exist_ok=True)
                 target = os.path.join(p, f"{host_name}.json")
@@ -475,18 +490,28 @@ def install_chrome_bridge():
         except Exception as e:
             console.print(f"[bold yellow][!] Linuxda integratsiyani o'rnatib bo'lmadi: {e}[/bold yellow]")
 
-def install_kino():
+def install_kino(venv_python=None):
     """Dasturni 'kino' buyrug'i orqali ishga tushadigan qilish (Install)"""
     script_path = os.path.realpath(__file__)
+    script_dir = os.path.dirname(script_path)
     
+    # Python interpreterini aniqlash
+    python_exe = venv_python if venv_python else sys.executable
+    if not venv_python:
+        # Avtomatik .venv ni tekshirish
+        auto_venv = os.path.join(script_dir, ".venv", "Scripts", "python.exe") if IS_WINDOWS else os.path.join(script_dir, ".venv", "bin", "python3")
+        if os.path.exists(auto_venv):
+            python_exe = auto_venv
+
     if IS_WINDOWS:
         # Windowsda WindowsApps papkasi PATHda bor
         bin_dir = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Microsoft', 'WindowsApps')
         link_path = os.path.join(bin_dir, "kino.cmd")
-        wrapper_content = f'@echo off\npython "{script_path}" %*'
+        wrapper_content = f'@echo off\n"{python_exe}" "{script_path}" %*'
     else:
         bin_dir = os.path.expanduser("~/.local/bin")
         link_path = os.path.join(bin_dir, "kino")
+        wrapper_content = f'#!/bin/bash\n"{python_exe}" "{script_path}" "$@"'
     
     try:
         if not os.path.exists(bin_dir):
@@ -496,15 +521,16 @@ def install_kino():
             if os.path.islink(link_path) or os.path.isfile(link_path):
                 os.remove(link_path)
             
-        if IS_WINDOWS:
-            with open(link_path, 'w') as f:
-                f.write(wrapper_content)
-        else:
-            os.symlink(script_path, link_path)
+        # Wrapper yaratish (Linuxda ham, Windowsda ham)
+        with open(link_path, 'w') as f:
+            f.write(wrapper_content)
+        
+        if not IS_WINDOWS:
+            os.chmod(link_path, 0o755)
             os.chmod(script_path, 0o755)
         
         # Chrome integratsiyasini ham o'rnatamiz
-        install_chrome_bridge()
+        install_chrome_bridge(python_exe=python_exe)
         
         console.print(f"\n[bold green][+] Tabriklaymiz! Dastur muvaffaqiyatli o'rnatildi.[/bold green]")
         console.print(f"[cyan][!] Endi terminalning istalgan joyida shunchaki [bold]kino[/bold] deb yozsangiz dastur ishga tushadi.[/cyan]")

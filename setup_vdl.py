@@ -10,6 +10,14 @@ REQUIRED_PACKAGES = ["rich", "questionary", "yt-dlp"]
 def is_windows():
     return os.name == 'nt'
 
+def is_termux():
+    return "com.termux" in os.environ.get("PREFIX", "")
+
+def get_os_name():
+    if is_windows(): return "Windows"
+    if is_termux(): return "Termux (Android)"
+    return "Linux/Unix"
+
 def check_ffmpeg():
     """Tizimda ffmpeg borligini tekshirish"""
     return shutil.which("ffmpeg") is not None
@@ -24,14 +32,17 @@ def install_packages():
     except ImportError:
         print("[!] XATOLIK: Tizimda 'pip' moduli topilmadi.")
         if is_windows():
-            print("    -> Iltimos, Python'ni qayta o'rnating va 'Add pip to PATH' belgisini qo'ying.")
+            print("    -> Windowsda: Pythonni qayta o'rnating va 'Add to PATH' belgisini qo'ying.")
+        elif is_termux():
+            print("    -> Termuxda: pkg install python")
         else:
-            print("    -> Iltimos, pip'ni o'rnating: sudo apt install python3-pip")
+            print("    -> Linuxda: sudo apt install python3-pip")
         return False
 
     try:
         # pip orqali o'rnatish
-        subprocess.check_call([sys.executable, "-m", "pip", "install"] + REQUIRED_PACKAGES)
+        print(f"[*] {', '.join(REQUIRED_PACKAGES)} o'rnatilmoqda...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-U"] + REQUIRED_PACKAGES)
         print("[+] Kutubxonalar muvaffaqiyatli tayyorlandi.\n")
         return True
     except Exception as e:
@@ -40,42 +51,41 @@ def install_packages():
 
 def main():
     print("="*60)
-    print("🎬 VDL (Universal Video Downloader) - O'rnatish va Sozlash")
+    print("🎬 VDL (Universal Video Downloader) - Universal Setup")
     print("="*60)
-    print(f"Joriy OS: {'Windows' if is_windows() else 'Linux/Unix'}")
+    print(f"Tizim: {get_os_name()}")
     
     # 1. Install pip packages
     if not install_packages():
         sys.exit(1)
 
     # 2. Check FFmpeg
-    print("--- 2. Tizim vositalarini tekshirish ---")
+    print("--- 2. Tizim vositalarini tekshirish (FFmpeg) ---")
     if check_ffmpeg():
         print("[+] FFmpeg topildi. Videolar birlashtirishga tayyor.")
     else:
         print("[!] OGOHLANTIRISH: FFmpeg topilmadi!")
         if is_windows():
-            print("    -> Iltimos, ffmpeg.org saytidan yuklab oling va PATH'ga qo'shing.")
+            print("    -> Yuklab oling: https://ffmpeg.org/download.html")
+        elif is_termux():
+            print("    -> O'rnating: pkg install ffmpeg")
         else:
-            print("    -> Iltimos, o'rnating: sudo apt install ffmpeg")
+            print("    -> O'rnating: sudo apt install ffmpeg")
     print("")
 
     # 3. Setup Global Command and Chrome Bridge
-    print("--- 3. Tizimga integratsiya qilish ---")
+    print("--- 3. Tizimga integratsiya ---")
     try:
-        # Endi kutubxonalar bor, uzmovi_dl ni import qilamiz
         script_dir = os.path.dirname(os.path.realpath(__file__))
         sys.path.append(script_dir)
-        
         import uzmovi_dl
         
-        # Install global command
         if uzmovi_dl.install_kino():
-            print("[+] 'kino' buyrug'i va Chrome integratsiyasi tayyor.")
+            print(f"[+] Integratsiya yakunlandi ({get_os_name()}).")
         else:
-            print("[!] Integratsiyada qandaydir muammo bo'ldi, lekin dastur ishlashi kerak.")
+            print("[!] Integratsiya jarayonida ogohlantirish (Manual setup talab qilinishi mumkin).")
     except Exception as e:
-        print(f"[!] Xatolik: Integratsiya jarayonida xato: {e}")
+        print(f"[!] Xatolik integratsiyada: {e}")
 
     print("\n" + "="*60)
     print("🎉 O'rnatish yakunlandi!")

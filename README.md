@@ -1,5 +1,7 @@
 # 🎬 VDL (Universal Video Downloader & Uzmovi TV) - V2.0
 
+[https://github.com/drowgone/uzmovi_downloader](https://github.com/drowgone/uzmovi_downloader)
+
 VDL - bu istalgan platformadan (YouTube, Instagram, Facebook, Uzmovi va boshqa 1000 dan ortiq saytlar) videolarni eng yuqori sifatda yuklab olish uchun mo'ljallangan terminal va brauzerga asoslangan kuchli vosita.
 
 ![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)

@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.log
+topilgan_kinolar.txt
+.gemini/
+config.json
+vdl_host/vdl_host_debug.log
+vdl_host/vdl_host_error.log
+*.mp4
+*.part
+*.ytdl
+node_modules/

@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Kino Downloader Helper",
+  "version": "1.0",
+  "description": "Video manzillarini o'ng tugmani bosish orqali yuklab olish uchun yordamchi.",
+  "permissions": ["nativeMessaging", "contextMenus"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Kino Downloader"
+  },
+  "icons": {
+    "48": "icon.png"
+  }
+}

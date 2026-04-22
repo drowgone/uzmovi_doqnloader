@@ -20,14 +20,18 @@ VDL - bu istalgan platformadan (YouTube, Instagram, Facebook, Uzmovi va boshqa 1
 
 ---
 
-## 🚀 O'rnatish
+## 🚀 O'rnatish va Ishga tushirish (Eng oson yo'li)
 
-### 1. Oldindan talablar
-Tizimingizda quyidagilar bo'lishi shart:
-*   **Python 3.7+**
-*   **FFmpeg** (Videolarni birlashtirish uchun)
+Loyihani o'rnatish va barcha kutubxonalarni sozlash uchun terminalda shunchaki quyidagi buyruqni bering:
 
-### 2. O'rnatish buyruqlari
+```bash
+python3 setup_vdl.py
+```
+Bu buyruq kutubxonalarni o'rnatadi, tizimga integratsiya qiladi va dasturni ishga tushiradi.
+
+---
+
+## 🚀 Manual O'rnatish (Qo'lda)
 
 #### **Linux (Ubuntu/Debian):**
 ```bash

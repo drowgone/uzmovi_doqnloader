@@ -1,8 +1,9 @@
 #!/bin/bash
 # Setup VDL Native Messaging Host
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOST_NAME="com.chrome_ex.vdl"
-JSON_FILE="../vdl_host/$HOST_NAME.json"
+JSON_FILE="$SCRIPT_DIR/$HOST_NAME.json"
 
 # Check for Chrome/Chromium config directories
 CHROME_PATH="$HOME/.config/google-chrome/NativeMessagingHosts"

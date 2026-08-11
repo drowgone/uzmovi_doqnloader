@@ -32,6 +32,10 @@ def main():
             if message:
                 url = message.get('url')
                 if url:
+                    # URL xavfsizligini tekshirish (Command injection va boshqa xavflarni oldini olish uchun)
+                    if not isinstance(url, str) or not url.strip().startswith(("http://", "https://")):
+                        continue
+
                     # Launch the opener script in a new terminal
                     # Using absolute path for safety
                     script_dir = os.path.dirname(os.path.realpath(__file__))
@@ -43,18 +47,33 @@ def main():
                     if is_windows:
                         # Windows: Use CREATE_NEW_CONSOLE for a clean separate terminal
                         # This avoids shell quoting issues with 'start' and correctly handles URLs with '&'
-                        try:
-                            # subprocess.CREATE_NEW_CONSOLE constant is only available on Windows
-                            CREATE_NEW_CONSOLE = 0x00000010
-                            subprocess.Popen([sys.executable, opener_path, url], creationflags=CREATE_NEW_CONSOLE)
-                        except Exception as terminal_err:
-                             # Fallback to shell start if something goes wrong
-                             subprocess.Popen(f'start "VDL Downloader" "{sys.executable}" "{opener_path}" "{url}"', shell=True)
+                        # We do not use shell=True to prevent command injection!
+                        CREATE_NEW_CONSOLE = 0x00000010
+                        subprocess.Popen([sys.executable, opener_path, url], creationflags=CREATE_NEW_CONSOLE)
                     else:
-                        # Linux: Use gnome-terminal
-                        # Try using --app-id and --active which can help force tab behavior
-                        cmd = ['gnome-terminal', '--app-id', 'org.gnome.Terminal', '--tab', '--active', '--', sys.executable, opener_path, url]
-                        subprocess.Popen(cmd)
+                        # Linux / macOS: Use available terminal emulators dynamically
+                        import shutil
+                        terminals = [
+                            ('gnome-terminal', ['gnome-terminal', '--app-id', 'org.gnome.Terminal', '--tab', '--active', '--', sys.executable, opener_path, url]),
+                            ('konsole', ['konsole', '--new-tab', '-e', sys.executable, opener_path, url]),
+                            ('xfce4-terminal', ['xfce4-terminal', '--tab', '-e', f'{sys.executable} "{opener_path}" "{url}"']),
+                            ('x-terminal-emulator', ['x-terminal-emulator', '-e', sys.executable, opener_path, url]),
+                            ('xterm', ['xterm', '-e', sys.executable, opener_path, url])
+                        ]
+
+                        launched = False
+                        for term_name, cmd in terminals:
+                            if shutil.which(term_name):
+                                try:
+                                    subprocess.Popen(cmd)
+                                    launched = True
+                                    break
+                                except Exception:
+                                    pass
+
+                        if not launched:
+                            # Fallback if no terminal found, run it directly in background (or log)
+                            subprocess.Popen([sys.executable, opener_path, url])
                     
                     send_message({"status": "launched", "url": url})
             else:

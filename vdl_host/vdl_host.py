@@ -33,7 +33,15 @@ def main():
                 url = message.get('url')
                 if url:
                     # URL xavfsizligini tekshirish (Command injection va boshqa xavflarni oldini olish uchun)
-                    if not isinstance(url, str) or not url.strip().startswith(("http://", "https://")):
+                    if not isinstance(url, str):
+                        continue
+                    from urllib.parse import urlparse
+                    try:
+                        parsed = urlparse(url.strip())
+                        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+                            continue
+                        url = url.strip()
+                    except Exception:
                         continue
 
                     # Launch the opener script in a new terminal
@@ -50,13 +58,30 @@ def main():
                         # We do not use shell=True to prevent command injection!
                         CREATE_NEW_CONSOLE = 0x00000010
                         subprocess.Popen([sys.executable, opener_path, url], creationflags=CREATE_NEW_CONSOLE)
+                    elif sys.platform == "darwin":
+                        # macOS: Use AppleScript to open Terminal and run the python opener securely
+                        launched = False
+                        try:
+                            cmd_str = f'"{sys.executable}" "{opener_path}" "{url}"'
+                            apple_script = f'tell application "Terminal" to do script {json.dumps(cmd_str)}'
+                            subprocess.Popen(['osascript', '-e', apple_script])
+                            launched = True
+                        except Exception:
+                            pass
+
+                        if not launched:
+                            subprocess.Popen([sys.executable, opener_path, url])
                     else:
-                        # Linux / macOS: Use available terminal emulators dynamically
+                        # Linux: Use available terminal emulators dynamically
                         import shutil
                         terminals = [
                             ('gnome-terminal', ['gnome-terminal', '--app-id', 'org.gnome.Terminal', '--tab', '--active', '--', sys.executable, opener_path, url]),
                             ('konsole', ['konsole', '--new-tab', '-e', sys.executable, opener_path, url]),
                             ('xfce4-terminal', ['xfce4-terminal', '--tab', '-e', f'{sys.executable} "{opener_path}" "{url}"']),
+                            ('mate-terminal', ['mate-terminal', '--', sys.executable, opener_path, url]),
+                            ('kitty', ['kitty', '--', sys.executable, opener_path, url]),
+                            ('alacritty', ['alacritty', '-e', sys.executable, opener_path, url]),
+                            ('lxterminal', ['lxterminal', '-e', sys.executable, opener_path, url]),
                             ('x-terminal-emulator', ['x-terminal-emulator', '-e', sys.executable, opener_path, url]),
                             ('xterm', ['xterm', '-e', sys.executable, opener_path, url])
                         ]

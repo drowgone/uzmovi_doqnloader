@@ -57,15 +57,16 @@ video va audio [bold]aylanib (merging)[/bold] qolmasligi uchun [bold]FFmpeg[/bol
     console.print(Panel(warning_text, title="TIZIM XATOLIGI", border_style="red"))
     return False
 
-# --- DEPENDENCY AUTOLOADER ---
+# --- DEPENDENCY CHECK ---
 def check_dependencies():
-    try:
-        import rich
-        import questionary
-        import yt_dlp
-        return True
-    except ImportError:
-        return False
+    """Check if required libraries (rich, questionary, yt-dlp) are installed"""
+    import importlib
+    for lib in ["rich", "questionary", "yt_dlp"]:
+        try:
+            importlib.import_module(lib)
+        except ImportError:
+            return False
+    return True
 
 if not check_dependencies():
     # Try local .venv relative to script
@@ -140,6 +141,21 @@ def save_config(download_dir):
     except:
         return False
 
+def sanitize_filename(name):
+    """Filename yoki folder nomidan xavfli belgilarni olib tashlash"""
+    # Windows/Linux tizimlari uchun taqiqlangan belgilar
+    cleaned = re.sub(r'[\\/*?:"<>|]', "", name).strip()
+    # Directory traversal (..), absolute path va relative path sakrashlarini oldini olish
+    cleaned = os.path.basename(cleaned)
+    cleaned = cleaned.replace("..", "").replace("/", "").replace("\\", "").strip()
+    return cleaned if cleaned else "Video"
+
+def is_safe_path(base_dir, path):
+    """Path target directory ichida ekanligini tekshirish (Directory traversal himoyasi)"""
+    real_base = os.path.realpath(base_dir)
+    real_path = os.path.realpath(path)
+    return real_base == real_path or real_path.startswith(real_base + os.sep)
+
 def show_help():
     """Dastur haqida batafsil yordam ma'lumotlarini ko'rsatish"""
     download_base = load_config()
@@ -204,11 +220,7 @@ def get_uzmovi_info(url, retries=3):
 
             title_match = re.search(r'<title>(.*?)</title>', html)
             title = title_match.group(1).split('-')[0].strip() if title_match else "Kino"
-            title_clean = re.sub(r'[\\/*?:"<>|]', "", title).strip()
-            title_clean = title_clean.replace("(", "").replace(")", "").strip()
-            # Directory traversal hujumlarini oldini olish uchun ".." belgilarini olib tashlaymiz
-            title_clean = title_clean.replace("..", "").strip()
-            
+            title_clean = sanitize_filename(title)
             folder_name = title_clean
 
             iframe_match = re.search(r'src="(https://uzdown\.[a-zA-Z0-9.-]+/embed/[^"]+)"', html)
@@ -219,7 +231,7 @@ def get_uzmovi_info(url, retries=3):
             
             ep_match = re.search(r'episode=(\d+)', iframe_url)
             if ep_match:
-                title_clean = f"{title_clean} - {ep_match.group(1)}-qism"
+                title_clean = sanitize_filename(f"{title_clean} - {ep_match.group(1)}-qism")
                 
             req2 = urllib.request.Request(iframe_url, headers={'User-Agent': 'Mozilla/5.0'})
             iframe_html = urllib.request.urlopen(req2, timeout=10).read().decode('utf-8')
@@ -246,13 +258,11 @@ def get_universal_info(url):
         
         info = json.loads(result.stdout)
         title = info.get("title", "Video")
-        title_clean = re.sub(r'[\\/*?:"<>|]', "", title).strip()
-        title_clean = title_clean.replace("(", "").replace(")", "").strip() # Qavslarni ham olib tashlaymiz xavfsizlik uchun
-        # Directory traversal hujumlarini oldini olish uchun ".." belgilarini olib tashlaymiz
-        title_clean = title_clean.replace("..", "").strip()
+        title_clean = sanitize_filename(title)
         
         # Folder nomi sifatida sayt nomini ishlatamiz yoki 'Downloads'
-        folder_name = info.get("extractor_key", "General")
+        extractor_key = info.get("extractor_key", "General")
+        folder_name = sanitize_filename(extractor_key)
         
         return url, {"title": title_clean, "folder": os.path.join(folder_name, title_clean), "source_url": url}, None
     except Exception as e:
@@ -260,10 +270,19 @@ def get_universal_info(url):
 
 def get_video_info(url):
     """Urlni tekshirib tegishli parserga yuborish"""
-    if "uzmovi.tv" in url:
-        return get_uzmovi_info(url)
+    from urllib.parse import urlparse
+    try:
+        parsed = urlparse(url.strip())
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            return url, None, "Xavfsiz bo'lmagan yoki noto'g'ri URL!"
+    except Exception as e:
+        return url, None, f"Noto'g'ri URL: {str(e)}"
+
+    url_str = url.strip()
+    if "uzmovi.tv" in url_str:
+        return get_uzmovi_info(url_str)
     else:
-        return get_universal_info(url)
+        return get_universal_info(url_str)
 
 def get_available_qualities(url):
     """yt-dlp yordamida mavjud sifatlarni aniqlash"""
@@ -367,9 +386,7 @@ def download_with_progress(command, file_name):
                         if msvcrt.kbhit():
                             key = msvcrt.getch().decode('utf-8').lower()
                             if key == 'p':
-                                paused = not paused
-                                # Windowsda faqat UI'da pauza qilamiz (SIGSTOP yo'q) va ogohlantiramiz
-                                progress.update(task, description=f"[bold yellow][PAUZA (Faqat UI)][/bold yellow] {original_desc}" if paused else original_desc)
+                                console.print("[yellow]\n[!] Windows operatsion tizimida yuklashni to'xtatib turish (Pause) qo'llab-quvvatlanmaydi.[/yellow]\n")
                         time.sleep(0.1)
                     else:
                         # select bilan input kutish (0.1 soniya timeout)
@@ -444,97 +461,102 @@ def is_installed():
 def install_chrome_bridge(python_exe=None):
     """Chrome uchun Native Messaging Host'ni avtomatik sozlash"""
     script_dir = os.path.dirname(os.path.realpath(__file__))
-    host_json_path = os.path.join(script_dir, "vdl_host", "com.chrome_ex.vdl.json")
+    host_json_template_path = os.path.join(script_dir, "vdl_host", "com.chrome_ex.vdl.json")
     
-    if not os.path.exists(host_json_path):
+    if not os.path.exists(host_json_template_path):
         return
 
     host_name = "com.chrome_ex.vdl"
 
-    # Tayyorlash: Manifest tarkibini o'qish va moslashtirish
+    # Tayyorlash: Manifest and CONFIG_DIR paths
+    config_dir = get_config_dir()
+    os.makedirs(config_dir, exist_ok=True)
+    host_json_path = os.path.join(config_dir, "com.chrome_ex.vdl.json")
+
     try:
-        with open(host_json_path, 'r') as f:
+        with open(host_json_template_path, 'r') as f:
             manifest = json.load(f)
         
-            # OS ga qarab host yo'lini aniqlash
-            host_script_path = os.path.join(script_dir, "vdl_host", "vdl_host.py")
+        # OS ga qarab host yo'lini aniqlash
+        host_script_path = os.path.join(script_dir, "vdl_host", "vdl_host.py")
 
-            # Python interpreterini aniqlash (agar berilmagan bo'lsa)
-            if not python_exe:
-                python_exe = sys.executable
-                venv_python = os.path.join(script_dir, ".venv", "Scripts", "python.exe") if IS_WINDOWS else os.path.join(script_dir, ".venv", "bin", "python3")
-                if os.path.exists(venv_python):
-                    python_exe = venv_python
-
-            if IS_WINDOWS:
-                # Windowsda .bat wrapper yaratamiz, chunki Chrome .py ni to'g'ridan-to'g'ri ishga tushirishi qiyin
-                host_cmd_path = os.path.join(script_dir, "vdl_host", "vdl_host.bat")
-                with open(host_cmd_path, 'w') as f:
-                    f.write(f'@echo off\n"{python_exe}" "{host_script_path}" %*')
-            else:
-                # Linuxda ham wrapper orqali venv pythonni ishlatamiz
-                host_cmd_path = os.path.join(script_dir, "vdl_host", "vdl_host_wrapper.sh")
-                with open(host_cmd_path, 'w') as f:
-                    f.write(f'#!/bin/bash\n"{python_exe}" "{host_script_path}" "$@"')
-                os.chmod(host_cmd_path, 0o755)
-                os.chmod(host_script_path, 0o755)
-
-            manifest["path"] = host_cmd_path
-        except Exception as e:
-            console.print(f"[bold yellow][!] Manifest tayyorlashda xato: {e}[/bold yellow]")
-            return
+        # Python interpreterini aniqlash (agar berilmagan bo'lsa)
+        if not python_exe:
+            python_exe = sys.executable
+            venv_python = os.path.join(script_dir, ".venv", "Scripts", "python.exe") if IS_WINDOWS else os.path.join(script_dir, ".venv", "bin", "python3")
+            if os.path.exists(venv_python):
+                python_exe = venv_python
 
         if IS_WINDOWS:
-            try:
-                import winreg
-                # Registry path calculation
-                reg_key_path = f"Software\\Google\\Chrome\\NativeMessagingHosts\\{host_name}"
+            # Windowsda .bat wrapper yaratamiz, chunki Chrome .py ni to'g'ridan-to'g'ri ishga tushirishi qiyin
+            host_cmd_path = os.path.join(config_dir, "vdl_host.bat")
+            with open(host_cmd_path, 'w') as f:
+                f.write(f'@echo off\n"{python_exe}" "{host_script_path}" %*')
+        else:
+            # Linuxda ham wrapper orqali venv pythonni ishlatamiz
+            host_cmd_path = os.path.join(config_dir, "vdl_host_wrapper.sh")
+            with open(host_cmd_path, 'w') as f:
+                f.write(f'#!/bin/bash\n"{python_exe}" "{host_script_path}" "$@"')
+            os.chmod(host_cmd_path, 0o755)
+            os.chmod(host_script_path, 0o755)
 
-                # Yangilangan manifestni source joyiga saqlab qo'yamiz (yoki vaqtinchalik)
-                # Lekin registry manifestning O'ZIGA emas, uning JOYLASHGAN JOYIGA qarashi kerak
-                # Shuning uchun source manifestni o'zini yangilaymiz
-                with open(host_json_path, 'w') as f:
-                    json.dump(manifest, f, indent=2)
+        manifest["path"] = host_cmd_path
+    except Exception as e:
+        console.print(f"[bold yellow][!] Manifest tayyorlashda xato: {e}[/bold yellow]")
+        return
 
+    if IS_WINDOWS:
+        try:
+            import winreg
+            # Registry path calculation
+            reg_key_path = f"Software\\Google\\Chrome\\NativeMessagingHosts\\{host_name}"
+
+            # Yangilangan manifestni safe config_dir ichiga saqlab qo'yamiz (template o'zgarishsiz qoladi!)
+            with open(host_json_path, 'w') as f:
+                json.dump(manifest, f, indent=2)
+
+            key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, reg_key_path)
+            winreg.SetValueEx(key, None, 0, winreg.REG_SZ, host_json_path)
+            winreg.CloseKey(key)
+
+            for browser in ["Chromium", "Microsoft\\Edge", "BraveSoftware\\Brave-Browser"]:
+                reg_key_path = f"Software\\{browser}\\NativeMessagingHosts\\{host_name}"
                 key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, reg_key_path)
                 winreg.SetValueEx(key, None, 0, winreg.REG_SZ, host_json_path)
                 winreg.CloseKey(key)
 
-                for browser in ["Chromium", "Microsoft\\Edge", "BraveSoftware\\Brave-Browser"]:
-                    reg_key_path = f"Software\\{browser}\\NativeMessagingHosts\\{host_name}"
-                    key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, reg_key_path)
-                    winreg.SetValueEx(key, None, 0, winreg.REG_SZ, host_json_path)
-                    winreg.CloseKey(key)
+            console.print("[bold green][+] Chrome/Edge integratsiyasi (Windows Registry) muvaffaqiyatli sozlandi.[/bold green]")
+        except Exception as e:
+            console.print(f"[bold yellow][!] Windowsda integratsiyani o'rnatib bo'lmadi: {e}[/bold yellow]")
+    else:
+        # Linux va macOS
+        paths = [
+            os.path.expanduser("~/.config/google-chrome/NativeMessagingHosts"),
+            os.path.expanduser("~/.config/chromium/NativeMessagingHosts"),
+            os.path.expanduser("~/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts"),
+            os.path.expanduser("~/.config/microsoft-edge/NativeMessagingHosts"),
+            os.path.expanduser("~/Library/Application Support/Google/Chrome/NativeMessagingHosts"),
+            os.path.expanduser("~/Library/Application Support/Chromium/NativeMessagingHosts"),
+            os.path.expanduser("~/Library/Application Support/BraveSoftware/Brave-Browser/NativeMessagingHosts"),
+            os.path.expanduser("~/Library/Application Support/Microsoft Edge/NativeMessagingHosts")
+        ]
 
-                console.print("[bold green][+] Chrome/Edge integratsiyasi (Windows Registry) muvaffaqiyatli sozlandi.[/bold green]")
-            except Exception as e:
-                console.print(f"[bold yellow][!] Windowsda integratsiyani o'rnatib bo'lmadi: {e}[/bold yellow]")
-        else:
-            # Linux va macOS
-            paths = [
-                os.path.expanduser("~/.config/google-chrome/NativeMessagingHosts"),
-                os.path.expanduser("~/.config/chromium/NativeMessagingHosts"),
-                os.path.expanduser("~/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts"),
-                os.path.expanduser("~/Library/Application Support/Google/Chrome/NativeMessagingHosts"),
-                os.path.expanduser("~/Library/Application Support/Chromium/NativeMessagingHosts")
-            ]
+        try:
+            # Yangilangan manifestni safe config_dir ichiga saqlab qo'yamiz (template o'zgarishsiz qoladi!)
+            with open(host_json_path, 'w') as f:
+                json.dump(manifest, f, indent=2)
 
-            try:
-                # Source manifestni ham yangilab qo'yamiz
-                with open(host_json_path, 'w') as f:
-                    json.dump(manifest, f, indent=2)
-
-                for p in paths:
-                    try:
-                        os.makedirs(p, exist_ok=True)
-                        target = os.path.join(p, f"{host_name}.json")
-                        with open(target, 'w') as f:
-                            json.dump(manifest, f, indent=2)
-                    except:
-                        pass
-                console.print("[bold green][+] Chrome integratsiyasi (Native Host) muvaffaqiyatli sozlandi.[/bold green]")
-            except Exception as e:
-                console.print(f"[bold yellow][!] Unix/Linux/macOS tizimlarida integratsiyani o'rnatib bo'lmadi: {e}[/bold yellow]")
+            for p in paths:
+                try:
+                    os.makedirs(p, exist_ok=True)
+                    target = os.path.join(p, f"{host_name}.json")
+                    with open(target, 'w') as f:
+                        json.dump(manifest, f, indent=2)
+                except:
+                    pass
+            console.print("[bold green][+] Chrome integratsiyasi (Native Host) muvaffaqiyatli sozlandi.[/bold green]")
+        except Exception as e:
+            console.print(f"[bold yellow][!] Unix/Linux/macOS tizimlarida integratsiyani o'rnatib bo'lmadi: {e}[/bold yellow]")
 
 def install_kino(venv_python=None):
     """Dasturni 'kino' buyrug'i orqali ishga tushadigan qilish (Install)"""
@@ -810,11 +832,16 @@ def run_app():
         for idx, info in enumerate(results, 1):
             # Global yuklash papkasini ham inobatga olamiz
             target_folder = os.path.join(download_base, info['folder'])
-            os.makedirs(target_folder, exist_ok=True)
-            
             file_name = f"{info['title']}.mp4"
             file_path = os.path.join(target_folder, file_name)
             
+            # Xavfsizlik tekshiruvi: path traversal hujumini to'liq bloklash
+            if not is_safe_path(download_base, file_path):
+                console.print(f"[bold red][!] XAVFSIZLIK XATOLIGI: {file_name} yuklash papkasidan tashqarida joylashgan! O'tkazib yuborilmoqda.[/bold red]")
+                continue
+
+            os.makedirs(target_folder, exist_ok=True)
+
             console.print(f"\n[bold green]=== [{idx}/{len(results)}] {file_name} ===[/bold green]")
             console.print(f"[cyan]📁 Saqlash joyi: {target_folder}/[/cyan]")
             
@@ -900,10 +927,15 @@ def direct_download(url):
             return True
     
     target_folder = os.path.join(download_base, info['folder'])
-    os.makedirs(target_folder, exist_ok=True)
-    
     file_name = f"{info['title']}.mp4"
     file_path = os.path.join(target_folder, file_name)
+
+    # Xavfsizlik tekshiruvi: path traversal hujumini to'liq bloklash
+    if not is_safe_path(download_base, file_path):
+        console.print(f"[bold red][!] XAVFSIZLIK XATOLIGI: {file_name} yuklash papkasidan tashqarida joylashgan! Chiqilmoqda.[/bold red]")
+        sys.exit(1)
+
+    os.makedirs(target_folder, exist_ok=True)
     
     console.print(f"[bold green]=== [1/1] {file_name} ===[/bold green]")
     console.print(f"[cyan]📁 Saqlash joyi: {target_folder}/[/cyan]")

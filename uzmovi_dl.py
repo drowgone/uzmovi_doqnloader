@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 import sys
 import os
-import urllib.request
 import re
 import subprocess
 import time
 import json
 import signal
 import threading
-import select
 import shutil
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -30,32 +28,6 @@ if IS_WINDOWS:
             sys.stdout.reconfigure(encoding='utf-8')
     except:
         pass
-
-# --- SYSTEM UTILS ---
-def check_ffmpeg():
-    """Tizimda ffmpeg borligini tekshirish"""
-    return shutil.which("ffmpeg") is not None
-
-def show_ffmpeg_warning():
-    """FFmpeg yo'qligi haqida chiroyli ogohlantirish ko'rsatish"""
-    if check_ffmpeg():
-        return True
-        
-    warning_text = """
-[bold red]⚠️  DIQQAT: FFmpeg topilmadi (Missing FFmpeg)![/bold red]
-
-YouTube va boshqa saytlardan [bold]1080p+[/bold] sifatda video yuklashda 
-video va audio [bold]aylanib (merging)[/bold] qolmasligi uchun [bold]FFmpeg[/bold] shart!
-
-[bold yellow]Yechim (O'rnatish):[/bold yellow]
-  [green]• Windows:[/green]   Terminalda shunchaki: [bold blue]winget install ffmpeg[/bold blue]
-  [green]• Linux:[/green]     [bold blue]sudo apt install ffmpeg[/bold blue]
-  [green]• Termux:[/green]    [bold blue]pkg install ffmpeg[/bold blue]
-
-[cyan]FFmpeg o'rnatilgandan so'ng dasturni qaytadan ishga tushiring.[/cyan]
-"""
-    console.print(Panel(warning_text, title="TIZIM XATOLIGI", border_style="red"))
-    return False
 
 # --- DEPENDENCY CHECK ---
 def check_dependencies():
@@ -98,10 +70,16 @@ if not check_dependencies():
         print("-" * 50)
         sys.exit(1)
 
+# Now we can import Rich, Questionary, and our helper modules safely
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich.panel import Panel
 import questionary
+
+# Dynamic imports of extracted modules
+import parser
+import downloader
+import ui
 
 console = Console()
 
@@ -141,314 +119,11 @@ def save_config(download_dir):
     except:
         return False
 
-def sanitize_filename(name):
-    """Filename yoki folder nomidan xavfli belgilarni olib tashlash"""
-    # Windows/Linux tizimlari uchun taqiqlangan belgilar
-    cleaned = re.sub(r'[\\/*?:"<>|]', "", name).strip()
-    # Directory traversal (..), absolute path va relative path sakrashlarini oldini olish
-    cleaned = os.path.basename(cleaned)
-    cleaned = cleaned.replace("..", "").replace("/", "").replace("\\", "").strip()
-    return cleaned if cleaned else "Video"
-
-def is_safe_path(base_dir, path):
-    """Path target directory ichida ekanligini tekshirish (Directory traversal himoyasi)"""
-    real_base = os.path.realpath(base_dir)
-    real_path = os.path.realpath(path)
-    return real_base == real_path or real_path.startswith(real_base + os.sep)
-
 def show_help():
-    """Dastur haqida batafsil yordam ma'lumotlarini ko'rsatish"""
-    download_base = load_config()
-    print_banner()
-    
-    os_info = "Linux"
-    if IS_WINDOWS: os_info = "Windows"
-    if IS_TERMUX: os_info = "Termux (Android)"
-    
-    help_text = f"""
-[bold cyan]Sizning tizimingiz:[/bold cyan] [white]{os_info}[/white]
-[bold yellow]📂 Joriy yuklash papkasi:[/bold yellow] [cyan]{download_base}[/cyan]
-
-[bold yellow]Dastur haqida:[/bold yellow]
-Ushbu dastur istalgan video manzilidan (YouTube, Instagram, Uzmovi va h.k.) videolarni [bold]yt-dlp[/bold] yordamida yuklab olish uchun mo'ljallangan.
-
-[bold green]Buyruqlar:[/bold green]
-  [bold]kino[/bold]          - Dasturni interaktiv menyu bilan ochish
-  [bold]kino --help[/bold]   - Ushbu yordam oynasini ko'rsatish
-
-[bold magenta]Sizning tizimingizdagi manzillar:[/bold magenta]
-  - [cyan]Konfiguratsiya:[/cyan] {CONFIG_FILE}
-  - [cyan]Global buyruq:[/cyan]  kino
-
-[bold blue]Imkoniyatlar:[/bold blue]
-  1. Istalgan video URL manzilidan yuklash (Universal).
-  2. .txt fayldagi ko'plab linklarni ommaviy yuklash.
-  3. Uzmovi.tv dagi yashirin serial va filmlarni topish.
-
-[bold magenta]🌐 CHROME INTEGRATSIYASI (KENGAYTMA):[/bold magenta]
-Brauzerda o'ng tugmani bosish orqali yuklashni xohlasangiz:
-1. Chrome'da [cyan]chrome://extensions/[/cyan] ga kiring.
-2. [white]Developer mode[/white] ni yoqing va [white]Load unpacked[/white] tugmasini bosing.
-3. Papkani tanlang: [yellow]{os.path.dirname(os.path.realpath(__file__))}/vdl_extension[/yellow]
-4. Kengaytmaning [white]ID[/white] raqamini nusxalang.
-  5. [yellow]{os.path.dirname(os.path.realpath(__file__))}/vdl_host/com.chrome_ex.vdl.json[/yellow]
-   faylini ochib, [white]PLACEHOLDER_ID[/white] o'rniga ID ni qo'ying.
-6. Sozlamalardan [green]Kino'ni qayta o'rnating[/green] (Install).
-"""
-    console.print(Panel(help_text, title="YO'RIQNOMA", border_style="blue"))
-    sys.exit(0)
+    ui.show_help(console, Panel, IS_WINDOWS, IS_TERMUX, CONFIG_FILE, load_config)
 
 def print_banner():
-    console.clear()
-    banner = r"""[bold cyan]
-  _   _ ________  ________     _______  _____  _      
- | | | |__  /  \/  |  _ \ \   / /_   _||  __ \| |     
- | | | | / /| \  / | | | \ \ / /  | |  | |  | | |     
- | |_| |/ /_| |\/| | |_| |\ V /   | |  | |  | | |___  
-  \___//____|_|  |_|____/  \_/    |_|  | |__|_|_____| 
-                                       |_____/        
-[/bold cyan]
-[bold white]Universal Video Downloader (Any URL) & Uzmovi TV[/bold white]"""
-    console.print(Panel(banner, border_style="cyan", expand=False))
-
-def get_uzmovi_info(url, retries=3):
-    """Uzmovi urldan ma'lumotlarni tortib olish"""
-    for attempt in range(retries):
-        try:
-            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-            html = urllib.request.urlopen(req, timeout=10).read().decode('utf-8')
-
-            title_match = re.search(r'<title>(.*?)</title>', html)
-            title = title_match.group(1).split('-')[0].strip() if title_match else "Kino"
-            title_clean = sanitize_filename(title)
-            folder_name = title_clean
-
-            iframe_match = re.search(r'src="(https://uzdown\.[a-zA-Z0-9.-]+/embed/[^"]+)"', html)
-            if not iframe_match:
-                return url, None, "Iframe topilmadi."
-            
-            iframe_url = iframe_match.group(1)
-            
-            ep_match = re.search(r'episode=(\d+)', iframe_url)
-            if ep_match:
-                title_clean = sanitize_filename(f"{title_clean} - {ep_match.group(1)}-qism")
-                
-            req2 = urllib.request.Request(iframe_url, headers={'User-Agent': 'Mozilla/5.0'})
-            iframe_html = urllib.request.urlopen(req2, timeout=10).read().decode('utf-8')
-
-            m3u8_match = re.search(r"file:\s*['\"]([^'\"]+)['\"]", iframe_html)
-            if not m3u8_match:
-                return url, None, "m3u8 manba ssilkasi topilmadi."
-
-            return url, {"title": title_clean, "folder": os.path.join("uzmovi", folder_name), "source_url": m3u8_match.group(1)}, None
-        except Exception as e:
-            if attempt == retries - 1:
-                return url, None, str(e)
-            time.sleep(1)
-    
-    return url, None, "Xatolik ro'y berdi"
-
-def get_universal_info(url):
-    """yt-dlp yordamida istalgan urldan ma'lumotlarni olish"""
-    try:
-        cmd = [sys.executable, "-m", "yt_dlp", "-j", "--no-playlist", url]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            return url, None, result.stderr.strip() or "yt-dlp ma'lumot ololmadi"
-        
-        info = json.loads(result.stdout)
-        title = info.get("title", "Video")
-        title_clean = sanitize_filename(title)
-        
-        # Folder nomi sifatida sayt nomini ishlatamiz yoki 'Downloads'
-        extractor_key = info.get("extractor_key", "General")
-        folder_name = sanitize_filename(extractor_key)
-        
-        return url, {"title": title_clean, "folder": os.path.join(folder_name, title_clean), "source_url": url}, None
-    except Exception as e:
-        return url, None, str(e)
-
-def get_video_info(url):
-    """Urlni tekshirib tegishli parserga yuborish"""
-    from urllib.parse import urlparse
-    try:
-        parsed = urlparse(url.strip())
-        if parsed.scheme not in ("http", "https") or not parsed.netloc:
-            return url, None, "Xavfsiz bo'lmagan yoki noto'g'ri URL!"
-    except Exception as e:
-        return url, None, f"Noto'g'ri URL: {str(e)}"
-
-    url_str = url.strip()
-    if "uzmovi.tv" in url_str:
-        return get_uzmovi_info(url_str)
-    else:
-        return get_universal_info(url_str)
-
-def get_available_qualities(url):
-    """yt-dlp yordamida mavjud sifatlarni aniqlash"""
-    try:
-        cmd = [sys.executable, "-m", "yt_dlp", "-j", "--no-playlist", url]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            return []
-        
-        info = json.loads(result.stdout)
-        formats = info.get("formats", [])
-        
-        heights = set()
-        for f in formats:
-            h = f.get("height")
-            if h and isinstance(h, int):
-                heights.add(h)
-        
-        return sorted(list(heights), reverse=True)
-    except:
-        return []
-
-def get_single_key():
-    """Tugma bosilishini blokirovka qilmasdan o'qish"""
-    if IS_WINDOWS:
-        if msvcrt.kbhit():
-            try:
-                return msvcrt.getch().decode('utf-8').lower()
-            except:
-                return None
-        return None
-    else:
-        # Linux/Termux uchun non-blocking stdin
-        fd = sys.stdin.fileno()
-        if not os.isatty(fd):
-            return None
-        old_settings = termios.tcgetattr(fd)
-        try:
-            tty.setcbreak(fd)
-            # select yordamida stdin'da ma'lumot borligini tekshirish
-            if select.select([sys.stdin], [], [], 0)[0]:
-                return sys.stdin.read(1).lower()
-        finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-        return None
-
-def download_with_progress(command, file_name):
-    # yt-dlp ni qator-ma-qator matn chiqaradigan rejimda ishga tushirish
-    cmd = command + ["--newline", "--no-colors"]
-    
-    # Process group yaratish (Linuxda barcha bolalarini ham to'xtatish uchun)
-    popen_kwargs = {
-        "stdout": subprocess.PIPE,
-        "stderr": subprocess.STDOUT,
-        "text": True,
-        "bufsize": 1
-    }
-    if not IS_WINDOWS:
-        popen_kwargs["preexec_fn"] = os.setsid
-
-    process = subprocess.Popen(cmd, **popen_kwargs)
-
-    paused = False
-    stop_listener = threading.Event()
-    
-    paused = False
-    stop_listener = threading.Event()
-    
-    # Terminal kengligidan qat'i nazar barqaror turishi uchun xavfsiz o'lchamlar
-    # Kino nomini 15-20 belgida cheklaymiz, shunda bar qisqarib-cho'zilishga joy qoladi
-    desc_limit = 18
-    original_desc = file_name[:desc_limit] + "..." if len(file_name) > desc_limit else file_name
-
-    # Eng barqaror va xavfsiz ustunlar
-    columns = [
-        TextColumn("[cyan]{task.description}"),          # Tavsif (pad qilingan)
-        BarColumn(bar_width=None),                       # Moslashuvchan bar
-        TaskProgressColumn(),                            # %
-        TextColumn("[blue]{task.fields[total_size]:>10}"),# Umumiy hajm
-        TextColumn("[magenta]{task.fields[speed]:>11}"), # Tezlik
-        TextColumn("[yellow]{task.fields[eta]:>8}"),     # Qolgan vaqt
-    ]
-
-    # Tavsif qat'iy 20 belgidan oshmasligi va kam bo'lsa bo'shliq bilan to'ldirilishini ta'minlaymiz
-    formatted_desc = original_desc.ljust(20)
-
-    with Progress(*columns, console=console, transient=False, refresh_per_second=10) as progress:
-        task = progress.add_task(f"{formatted_desc}", total=100.0, speed="0 B/s", eta="--:--", total_size="-- MiB")
-        
-        def input_listener():
-            nonlocal paused
-            if not IS_WINDOWS:
-                fd = sys.stdin.fileno()
-                if not os.isatty(fd): return
-                old_settings = termios.tcgetattr(fd)
-                tty.setcbreak(fd)
-            
-            try:
-                while not stop_listener.is_set() and process.poll() is None:
-                    if IS_WINDOWS:
-                        if msvcrt.kbhit():
-                            key = msvcrt.getch().decode('utf-8').lower()
-                            if key == 'p':
-                                console.print("[yellow]\n[!] Windows operatsion tizimida yuklashni to'xtatib turish (Pause) qo'llab-quvvatlanmaydi.[/yellow]\n")
-                        time.sleep(0.1)
-                    else:
-                        # select bilan input kutish (0.1 soniya timeout)
-                        r, _, _ = select.select([sys.stdin], [], [], 0.1)
-                        if r:
-                            key = sys.stdin.read(1).lower()
-                            if key == 'p':
-                                paused = not paused
-                                if paused:
-                                    os.killpg(process.pid, signal.SIGSTOP)
-                                    progress.update(task, description=f"[bold yellow][PAUZA][/bold yellow] {original_desc}")
-                                else:
-                                    os.killpg(process.pid, signal.SIGCONT)
-                                    progress.update(task, description=f"{original_desc}")
-            except:
-                pass
-            finally:
-                if not IS_WINDOWS:
-                    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-
-        listener_thread = threading.Thread(target=input_listener, daemon=True)
-        listener_thread.start()
-
-        try:
-            error_log = []
-            for line in iter(process.stdout.readline, ''):
-                if not line: break
-                error_log.append(line.strip())
-                if len(error_log) > 20: error_log.pop(0)
-                
-                # Agar pauzada bo'lsa, readline to'xtab qoladi (chunki process ham to'xtagan)
-                match = re.search(r'\[download\]\s+(\d+\.\d+)%', line)
-                size_match = re.search(r'of\s+([~\d\.\w]+)', line)
-                speed_match = re.search(r'at\s+([~\d\.\w]+/s)', line)
-                eta_match = re.search(r'ETA\s+([\d:]+)', line)
-                
-                if match:
-                    percent = float(match.group(1))
-                    total_size = size_match.group(1) if size_match else "-- MiB"
-                    speed = speed_match.group(1) if speed_match else ""
-                    eta = eta_match.group(1) if eta_match else ""
-                    progress.update(task, completed=percent, speed=speed, eta=eta, total_size=total_size)
-        except KeyboardInterrupt:
-            stop_listener.set()
-            if not IS_WINDOWS:
-                try: 
-                    os.killpg(process.pid, signal.SIGCONT)
-                    os.killpg(process.pid, signal.SIGTERM)
-                except: pass
-            process.terminate()
-            raise KeyboardInterrupt
-        finally:
-            stop_listener.set()
-                
-    process.stdout.close()
-    return_code = process.wait()
-    if return_code != 0 and return_code != -15: # -15 is SIGTERM
-        if not IS_WINDOWS:
-            try: os.killpg(process.pid, signal.SIGCONT)
-            except: pass
-        error_msg = "\n".join(error_log[-5:]) if error_log else "Noma'lum xatolik"
-        raise Exception(f"Yuklash xatolik bilan to'xtadi (kod={return_code}).\nXatolik tafsiloti:\n{error_msg}")
+    ui.print_banner(console, Panel)
 
 def is_installed():
     """Dastur tizimga o'rnatilganligini tekshirish"""
@@ -626,59 +301,7 @@ def uninstall_kino():
         return False
 
 def run_settings(download_base):
-    """Sozlamalar sub-menyusi"""
-    installed = is_installed()
-    
-    choices = [
-        questionary.Choice(
-            title=[('class:folder', "Yuklash papkasini o'zgartirish")], 
-            value="folder"
-        )
-    ]
-    
-    if not installed:
-        choices.append(questionary.Choice(
-            title=[('class:install', "Dasturni tizimga o'rnatish ('kino' buyrug'i)")], 
-            value="install"
-        ))
-    else:
-        choices.append(questionary.Choice(
-            title=[('class:uninstall', "Dasturni tizimdan o'chirish")], 
-            value="uninstall"
-        ))
-        
-    choices.append(questionary.Choice(
-        title=[('class:back', "Orqaga")], 
-        value="back"
-    ))
-
-    action = questionary.select(
-        "Sozlamalar menyusi:",
-        choices=choices,
-        style=questionary.Style([
-            ('highlighted', 'fg:cyan bold'),
-            ('pointer', 'fg:cyan bold'),
-            ('folder', 'fg:blue'),
-            ('install', 'fg:green'),
-            ('uninstall', 'fg:red'),
-            ('back', 'fg:yellow'),
-        ])
-    ).ask()
-
-    if not action or action == "back":
-        return True
-
-    if action == "folder":
-        new_path = questionary.path("Yangi yuklash papkasini tanlang:", default=download_base, only_directories=True).ask()
-        if new_path:
-            save_config(new_path)
-            console.print(f"[bold green][+] Yuklash papkasi '{new_path}' ga o'zgartirildi.[/bold green]")
-    elif action == "install":
-        install_kino()
-    elif action == "uninstall":
-        uninstall_kino()
-    
-    return True
+    return ui.run_settings(console, questionary, is_installed, save_config, install_kino, uninstall_kino, download_base)
 
 def run_app():
     download_base = load_config()
@@ -772,7 +395,7 @@ def run_app():
             task = progress.add_task("[cyan]Kino ma'lumotlari qidirilmoqda...", total=total)
             
             with ThreadPoolExecutor(max_workers=5) as executor:
-                future_to_url = {executor.submit(get_video_info, url): url for url in urls}
+                future_to_url = {executor.submit(parser.get_video_info, url): url for url in urls}
                 for future in as_completed(future_to_url):
                     url = future_to_url[future]
                     try:
@@ -819,12 +442,12 @@ def run_app():
     save_path = "topilgan_kinolar.txt"
     
     # FFmpeg tekshiruvi (YouTube va h.k. uchun juda muhim)
-    is_ffmpeg_ok = check_ffmpeg()
+    is_ffmpeg_ok = downloader.check_ffmpeg()
 
     if download_confirm:
         # Agar FFmpeg yo'q bo'lsa va bu ehtimol YouTube bo'lsa, ogohlantirish
         if not is_ffmpeg_ok:
-            show_ffmpeg_warning()
+            downloader.show_ffmpeg_warning(console, Panel)
             console.print("[bold yellow][!] Ogohlantirish: Videolar alohida (audio/video) bo'lib qolishi mumkin.[/bold yellow]")
             if not questionary.confirm("Baribir davom etamizmi?").ask():
                 return True
@@ -836,7 +459,7 @@ def run_app():
             file_path = os.path.join(target_folder, file_name)
             
             # Xavfsizlik tekshiruvi: path traversal hujumini to'liq bloklash
-            if not is_safe_path(download_base, file_path):
+            if not downloader.is_safe_path(download_base, file_path):
                 console.print(f"[bold red][!] XAVFSIZLIK XATOLIGI: {file_name} yuklash papkasidan tashqarida joylashgan! O'tkazib yuborilmoqda.[/bold red]")
                 continue
 
@@ -862,7 +485,9 @@ def run_app():
                 # Windowsda path length va noqonuniy belgilar muammosini oldini olish
                 command.extend(["--windows-filenames", "--restrict-filenames", "--trim-filenames", "160"])
             try:
-                download_with_progress(command, file_name)
+                downloader.download_with_progress(
+                    command, file_name, console, Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+                )
                 console.print(f"[bold cyan][+] Muvaffaqiyatli saqlandi: {file_path}[/bold cyan]")
             except KeyboardInterrupt:
                 console.print(f"\n[bold red][-] Yuklash bekor qilindi.[/bold red]")
@@ -886,14 +511,14 @@ def direct_download(url):
     print_banner()
     console.print(f"[bold yellow]🔗 To'g'ridan-to'g'ri yuklash manzil:[/bold yellow] [cyan]{url}[/cyan]\n")
     
-    original_url, info, error = get_video_info(url)
+    original_url, info, error = parser.get_video_info(url)
     if not info:
         console.print(f"[bold red][!] Ma'lumot olib bo'lmadi: {error}[/bold red]")
         sys.exit(1)
     
     # Sifatlarni tekshirish
     console.print("[cyan]🔍 Mavjud sifatlar tekshirilmoqda...[/cyan]")
-    heights = get_available_qualities(info['source_url'])
+    heights = parser.get_available_qualities(info['source_url'])
     
     quality_str = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" # Default
     
@@ -921,8 +546,8 @@ def direct_download(url):
         console.print("[yellow][!] Sifatlarni aniqlab bo'lmadi, eng yaxshi sifat tanlanadi.[/yellow]")
     
     # FFmpeg check for direct download
-    if not check_ffmpeg():
-        show_ffmpeg_warning()
+    if not downloader.check_ffmpeg():
+        downloader.show_ffmpeg_warning(console, Panel)
         if not questionary.confirm("Baribir davom etamizmi?").ask():
             return True
     
@@ -931,7 +556,7 @@ def direct_download(url):
     file_path = os.path.join(target_folder, file_name)
 
     # Xavfsizlik tekshiruvi: path traversal hujumini to'liq bloklash
-    if not is_safe_path(download_base, file_path):
+    if not downloader.is_safe_path(download_base, file_path):
         console.print(f"[bold red][!] XAVFSIZLIK XATOLIGI: {file_name} yuklash papkasidan tashqarida joylashgan! Chiqilmoqda.[/bold red]")
         sys.exit(1)
 
@@ -956,7 +581,9 @@ def direct_download(url):
     if IS_WINDOWS:
         command.extend(["--windows-filenames", "--restrict-filenames", "--trim-filenames", "160"])
     try:
-        download_with_progress(command, file_name)
+        downloader.download_with_progress(
+            command, file_name, console, Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+        )
         console.print(f"[bold cyan][+] Muvaffaqiyatli saqlandi: {file_path}[/bold cyan]")
     except Exception as e:
         console.print(f"[bold red][!] Xatolik: {e}[/bold red]")

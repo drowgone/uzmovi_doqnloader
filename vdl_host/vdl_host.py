@@ -32,7 +32,7 @@ def main():
             if message:
                 url = message.get('url')
                 if url:
-                    # URL xavfsizligini tekshirish (Command injection va boshqa xavflarni oldini olish uchun)
+                    # Strict URL validation to prevent command injection and ensure security
                     if not isinstance(url, str):
                         continue
                     from urllib.parse import urlparse
@@ -44,7 +44,7 @@ def main():
                     except Exception:
                         continue
 
-                    # Launch the opener script in a new terminal
+                    # Launch the opener script in a new terminal securely
                     # Using absolute path for safety
                     script_dir = os.path.dirname(os.path.realpath(__file__))
                     # opener is now a python script in the parent directory
@@ -53,26 +53,25 @@ def main():
                     is_windows = os.name == 'nt'
 
                     if is_windows:
-                        # Windows: Use CREATE_NEW_CONSOLE for a clean separate terminal
-                        # This avoids shell quoting issues with 'start' and correctly handles URLs with '&'
-                        # We do not use shell=True to prevent command injection!
+                        # Windows: Use CREATE_NEW_CONSOLE for a clean separate terminal.
+                        # Do NOT use shell=True under any circumstances to prevent shell expansion & command injection!
                         CREATE_NEW_CONSOLE = 0x00000010
-                        subprocess.Popen([sys.executable, opener_path, url], creationflags=CREATE_NEW_CONSOLE)
+                        subprocess.Popen([sys.executable, opener_path, url], creationflags=CREATE_NEW_CONSOLE, shell=False)
                     elif sys.platform == "darwin":
                         # macOS: Use AppleScript to open Terminal and run the python opener securely
                         launched = False
                         try:
                             cmd_str = f'"{sys.executable}" "{opener_path}" "{url}"'
                             apple_script = f'tell application "Terminal" to do script {json.dumps(cmd_str)}'
-                            subprocess.Popen(['osascript', '-e', apple_script])
+                            subprocess.Popen(['osascript', '-e', apple_script], shell=False)
                             launched = True
                         except Exception:
                             pass
 
                         if not launched:
-                            subprocess.Popen([sys.executable, opener_path, url])
+                            subprocess.Popen([sys.executable, opener_path, url], shell=False)
                     else:
-                        # Linux: Use available terminal emulators dynamically
+                        # Linux: Use available terminal emulators dynamically to avoid gnome-terminal dependency
                         import shutil
                         terminals = [
                             ('gnome-terminal', ['gnome-terminal', '--app-id', 'org.gnome.Terminal', '--tab', '--active', '--', sys.executable, opener_path, url]),
@@ -90,21 +89,22 @@ def main():
                         for term_name, cmd in terminals:
                             if shutil.which(term_name):
                                 try:
-                                    subprocess.Popen(cmd)
+                                    # Ensure shell=False is explicitly specified and list arguments are used
+                                    subprocess.Popen(cmd, shell=False)
                                     launched = True
                                     break
                                 except Exception:
                                     pass
 
                         if not launched:
-                            # Fallback if no terminal found, run it directly in background (or log)
-                            subprocess.Popen([sys.executable, opener_path, url])
+                            # Fallback if no terminal found, run it directly in background securely
+                            subprocess.Popen([sys.executable, opener_path, url], shell=False)
                     
                     send_message({"status": "launched", "url": url})
             else:
                 break
         except Exception as e:
-            # We can log to a file for debugging since stdout is used for messaging
+            # Log to a file for debugging securely
             try:
                 script_dir = os.path.dirname(os.path.realpath(__file__))
                 log_path = os.path.join(script_dir, "vdl_host_error.log")

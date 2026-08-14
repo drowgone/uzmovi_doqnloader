@@ -13,9 +13,13 @@ def is_windows():
 def is_termux():
     return "com.termux" in os.environ.get("PREFIX", "")
 
+def is_mac():
+    return sys.platform == "darwin"
+
 def get_os_name():
     if is_windows(): return "Windows"
     if is_termux(): return "Termux (Android)"
+    if is_mac(): return "macOS (OS X)"
     return "Linux/Unix"
 
 def check_ffmpeg():
@@ -73,7 +77,7 @@ def install_packages():
         except Exception as e:
             print(f"[!] Xatolik: Virtual muhitni yaratib bo'lmadi: {e}")
             if not is_windows() and not is_termux():
-                print("    -> Linuxda buni sinab ko'ring: sudo apt install python3-venv")
+                print("    -> Linux/macOS da buni sinab ko'ring: sudo apt install python3-venv")
             return False
 
     # 1.2 Venv python va pip yo'lini aniqlash
@@ -121,7 +125,7 @@ def main():
         elif is_termux():
             print("    -> O'rnating: pkg install ffmpeg")
         else:
-            print("    -> O'rnating: sudo apt install ffmpeg")
+            print("    -> O'rnating: sudo apt install ffmpeg (Linux) yoki brew install ffmpeg (macOS)")
     print("")
 
     # 3. Setup Global Command and Chrome Bridge

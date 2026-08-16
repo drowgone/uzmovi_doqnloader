@@ -13,8 +13,11 @@ mkdir -p "$CHROME_PATH"
 mkdir -p "$CHROMIUM_PATH"
 
 # Copy the JSON manifest
-cp "$JSON_FILE" "$CHROME_PATH/$HOST_NAME.json"
-cp "$JSON_FILE" "$CHROMIUM_PATH/$HOST_NAME.json"
-
-echo "[+] Native Messaging Host manifesti nusxalandi."
-echo "[!] Chrome kengaytmani yuklaganingizdan keyin ID raqamini ushbu fayllarga yozishimiz kerak bo'ladi."
+if [ -f "$JSON_FILE" ]; then
+    cp "$JSON_FILE" "$CHROME_PATH/$HOST_NAME.json"
+    cp "$JSON_FILE" "$CHROMIUM_PATH/$HOST_NAME.json"
+    echo "[+] Native Messaging Host manifesti nusxalandi."
+    echo "[!] Chrome kengaytmani yuklaganingizdan keyin ID raqamini ushbu fayllarga yozishimiz kerak bo'ladi."
+else
+    echo "[!] Xatolar: Manifest shabloni topilmadi: $JSON_FILE"
+fi

@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
+"""
+VDL Native Messaging Host for Chrome / Edge / Chromium / Brave Extensions.
+Listens for JSON messages on stdin and launches the downloader UI in a secure terminal process.
+"""
 import sys
 import json
 import struct
 import subprocess
 import os
+import shutil
+from urllib.parse import urlparse
 
 if sys.platform == "win32":
     import msvcrt
@@ -35,7 +41,7 @@ def main():
                     # URL xavfsizligini tekshirish (Command injection va boshqa xavflarni oldini olish uchun)
                     if not isinstance(url, str):
                         continue
-                    from urllib.parse import urlparse
+
                     try:
                         parsed = urlparse(url.strip())
                         if parsed.scheme not in ("http", "https") or not parsed.netloc:
@@ -44,18 +50,14 @@ def main():
                     except Exception:
                         continue
 
-                    # Launch the opener script in a new terminal
-                    # Using absolute path for safety
+                    # Launch the opener script in a new terminal using absolute paths
                     script_dir = os.path.dirname(os.path.realpath(__file__))
-                    # opener is now a python script in the parent directory
                     opener_path = os.path.join(os.path.dirname(script_dir), "kino_opener.py")
                     
                     is_windows = os.name == 'nt'
 
                     if is_windows:
-                        # Windows: Use CREATE_NEW_CONSOLE for a clean separate terminal
-                        # This avoids shell quoting issues with 'start' and correctly handles URLs with '&'
-                        # We do not use shell=True to prevent command injection!
+                        # Windows: Use CREATE_NEW_CONSOLE without shell=True to prevent command injection
                         CREATE_NEW_CONSOLE = 0x00000010
                         subprocess.Popen([sys.executable, opener_path, url], creationflags=CREATE_NEW_CONSOLE)
                     elif sys.platform == "darwin":
@@ -72,8 +74,7 @@ def main():
                         if not launched:
                             subprocess.Popen([sys.executable, opener_path, url])
                     else:
-                        # Linux: Use available terminal emulators dynamically
-                        import shutil
+                        # Linux: Detect available terminal emulators dynamically
                         terminals = [
                             ('gnome-terminal', ['gnome-terminal', '--app-id', 'org.gnome.Terminal', '--tab', '--active', '--', sys.executable, opener_path, url]),
                             ('konsole', ['konsole', '--new-tab', '-e', sys.executable, opener_path, url]),
@@ -97,14 +98,12 @@ def main():
                                     pass
 
                         if not launched:
-                            # Fallback if no terminal found, run it directly in background (or log)
                             subprocess.Popen([sys.executable, opener_path, url])
                     
                     send_message({"status": "launched", "url": url})
             else:
                 break
         except Exception as e:
-            # We can log to a file for debugging since stdout is used for messaging
             try:
                 script_dir = os.path.dirname(os.path.realpath(__file__))
                 log_path = os.path.join(script_dir, "vdl_host_error.log")

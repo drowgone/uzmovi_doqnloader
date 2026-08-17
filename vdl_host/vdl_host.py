@@ -10,7 +10,6 @@ if sys.platform == "win32":
     msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
     msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
 
-# Chrome Native Messaging Host logic
 def send_message(message):
     encoded_message = json.dumps(message).encode('utf-8')
     sys.stdout.buffer.write(struct.pack('I', len(encoded_message)))
@@ -32,7 +31,6 @@ def main():
             if message:
                 url = message.get('url')
                 if url:
-                    # URL xavfsizligini tekshirish (Command injection va boshqa xavflarni oldini olish uchun)
                     if not isinstance(url, str):
                         continue
                     from urllib.parse import urlparse
@@ -44,22 +42,17 @@ def main():
                     except Exception:
                         continue
 
-                    # Launch the opener script in a new terminal
-                    # Using absolute path for safety
                     script_dir = os.path.dirname(os.path.realpath(__file__))
-                    # opener is now a python script in the parent directory
                     opener_path = os.path.join(os.path.dirname(script_dir), "kino_opener.py")
                     
                     is_windows = os.name == 'nt'
 
                     if is_windows:
-                        # Windows: Use CREATE_NEW_CONSOLE for a clean separate terminal
-                        # This avoids shell quoting issues with 'start' and correctly handles URLs with '&'
-                        # We do not use shell=True to prevent command injection!
+                        # Windows: Use CREATE_NEW_CONSOLE without shell=True to avoid command injection
                         CREATE_NEW_CONSOLE = 0x00000010
                         subprocess.Popen([sys.executable, opener_path, url], creationflags=CREATE_NEW_CONSOLE)
                     elif sys.platform == "darwin":
-                        # macOS: Use AppleScript to open Terminal and run the python opener securely
+                        # macOS: Use osascript AppleScript for Terminal
                         launched = False
                         try:
                             cmd_str = f'"{sys.executable}" "{opener_path}" "{url}"'
@@ -97,14 +90,12 @@ def main():
                                     pass
 
                         if not launched:
-                            # Fallback if no terminal found, run it directly in background (or log)
                             subprocess.Popen([sys.executable, opener_path, url])
                     
                     send_message({"status": "launched", "url": url})
             else:
                 break
         except Exception as e:
-            # We can log to a file for debugging since stdout is used for messaging
             try:
                 script_dir = os.path.dirname(os.path.realpath(__file__))
                 log_path = os.path.join(script_dir, "vdl_host_error.log")

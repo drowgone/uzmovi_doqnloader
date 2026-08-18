@@ -215,28 +215,32 @@ def get_uzmovi_info(url, retries=3):
     """Uzmovi urldan ma'lumotlarni tortib olish"""
     for attempt in range(retries):
         try:
-            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-            html = urllib.request.urlopen(req, timeout=10).read().decode('utf-8')
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
+            html = urllib.request.urlopen(req, timeout=10).read().decode('utf-8', errors='ignore')
 
-            title_match = re.search(r'<title>(.*?)</title>', html)
+            title_match = re.search(r'<title>(.*?)</title>', html, re.IGNORECASE)
             title = title_match.group(1).split('-')[0].strip() if title_match else "Kino"
             title_clean = sanitize_filename(title)
             folder_name = title_clean
 
-            iframe_match = re.search(r'src="(https://uzdown\.[a-zA-Z0-9.-]+/embed/[^"]+)"', html)
+            iframe_match = re.search(r'src=["\'](https?://[a-zA-Z0-9.-]+/embed/[^"\']+)["\']', html, re.IGNORECASE)
             if not iframe_match:
                 return url, None, "Iframe topilmadi."
             
             iframe_url = iframe_match.group(1)
             
-            ep_match = re.search(r'episode=(\d+)', iframe_url)
+            ep_match = re.search(r'episode=(\d+)', iframe_url, re.IGNORECASE)
             if ep_match:
                 title_clean = sanitize_filename(f"{title_clean} - {ep_match.group(1)}-qism")
                 
-            req2 = urllib.request.Request(iframe_url, headers={'User-Agent': 'Mozilla/5.0'})
-            iframe_html = urllib.request.urlopen(req2, timeout=10).read().decode('utf-8')
+            req2 = urllib.request.Request(iframe_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
+            iframe_html = urllib.request.urlopen(req2, timeout=10).read().decode('utf-8', errors='ignore')
 
-            m3u8_match = re.search(r"file:\s*['\"]([^'\"]+)['\"]", iframe_html)
+            m3u8_match = re.search(r"file:\s*['\"]([^'\"]+)['\"]", iframe_html, re.IGNORECASE)
+            if not m3u8_match:
+                # Fallback search for m3u8 URL in iframe HTML
+                m3u8_match = re.search(r'["\'](https?://[^"\']+\.m3u8[^"\']*)["\']', iframe_html, re.IGNORECASE)
+
             if not m3u8_match:
                 return url, None, "m3u8 manba ssilkasi topilmadi."
 

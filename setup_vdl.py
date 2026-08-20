@@ -73,7 +73,9 @@ def install_packages():
         except Exception as e:
             print(f"[!] Xatolik: Virtual muhitni yaratib bo'lmadi: {e}")
             if not is_windows() and not is_termux():
-                print("    -> Linuxda buni sinab ko'ring: sudo apt install python3-venv")
+                print("    -> Linuxda (Debian/Ubuntu): sudo apt install python3-venv")
+                print("    -> Arch Linux: sudo pacman -S python")
+                print("    -> Fedora: sudo dnf install python3-virtualenv")
             return False
 
     # 1.2 Venv python va pip yo'lini aniqlash
@@ -121,7 +123,9 @@ def main():
         elif is_termux():
             print("    -> O'rnating: pkg install ffmpeg")
         else:
-            print("    -> O'rnating: sudo apt install ffmpeg")
+            print("    -> O'rnating (Ubuntu/Debian): sudo apt install ffmpeg")
+            print("    -> O'rnating (Arch Linux): sudo pacman -S ffmpeg")
+            print("    -> O'rnating (Fedora): sudo dnf install ffmpeg")
     print("")
 
     # 3. Setup Global Command and Chrome Bridge

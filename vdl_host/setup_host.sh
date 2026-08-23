@@ -12,9 +12,15 @@ CHROMIUM_PATH="$HOME/.config/chromium/NativeMessagingHosts"
 mkdir -p "$CHROME_PATH"
 mkdir -p "$CHROMIUM_PATH"
 
-# Copy the JSON manifest
-cp "$JSON_FILE" "$CHROME_PATH/$HOST_NAME.json"
-cp "$JSON_FILE" "$CHROMIUM_PATH/$HOST_NAME.json"
+# Use python installer to safely generate wrappers and install manifest in user config dirs
+if command -v python3 &>/dev/null; then
+    python3 -c "import sys; sys.path.append('$SCRIPT_DIR/..'); import uzmovi_dl; uzmovi_dl.install_chrome_bridge()"
+else
+    # Fallback copy manifest
+    if [ -f "$JSON_FILE" ]; then
+        cp "$JSON_FILE" "$CHROME_PATH/$HOST_NAME.json"
+        cp "$JSON_FILE" "$CHROMIUM_PATH/$HOST_NAME.json"
+    fi
+fi
 
-echo "[+] Native Messaging Host manifesti nusxalandi."
-echo "[!] Chrome kengaytmani yuklaganingizdan keyin ID raqamini ushbu fayllarga yozishimiz kerak bo'ladi."
+echo "[+] Native Messaging Host manifesti va sozlamalari muvaffaqiyatli o'rnatildi."

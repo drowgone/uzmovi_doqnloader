@@ -10,6 +10,21 @@ def main():
         sys.exit(1)
 
     url = sys.argv[1]
+
+    # Validate URL schema and format
+    from urllib.parse import urlparse
+    try:
+        parsed = urlparse(url.strip())
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            print(f"Xatolik: Xavfsiz bo'lmagan yoki noto'g'ri URL manzil: {url}")
+            input("\nChiqish uchun ENTER bosing...")
+            sys.exit(1)
+        url = url.strip()
+    except Exception as e:
+        print(f"Xatolik: URL parsing xatosi: {e}")
+        input("\nChiqish uchun ENTER bosing...")
+        sys.exit(1)
+
     script_dir = os.path.dirname(os.path.realpath(__file__))
     downloader_path = os.path.join(script_dir, "uzmovi_dl.py")
 

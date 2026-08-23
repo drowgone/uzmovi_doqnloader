@@ -93,8 +93,11 @@ if not check_dependencies():
         elif IS_WINDOWS:
             print(" -> pip install rich questionary yt-dlp")
         else:
-            print(" -> sudo apt install python3-rich python3-questionary yt-dlp")
-            print(" Yoki: pip install rich questionary yt-dlp")
+            print(" -> Debian/Ubuntu: sudo apt install python3-rich python3-questionary yt-dlp")
+            print(" -> Arch Linux:    sudo pacman -S python-rich python-questionary yt-dlp")
+            print(" -> Fedora:        sudo dnf install python3-rich python3-questionary yt-dlp")
+            print(" -> openSUSE:      sudo zypper install python3-rich python3-questionary yt-dlp")
+            print(" -> Yoki umumiy:   pip install rich questionary yt-dlp")
         print("-" * 50)
         sys.exit(1)
 
@@ -143,10 +146,10 @@ def save_config(download_dir):
 
 def sanitize_filename(name):
     """Filename yoki folder nomidan xavfli belgilarni olib tashlash"""
-    # Windows/Linux tizimlari uchun taqiqlangan belgilar
-    cleaned = re.sub(r'[\\/*?:"<>|]', "", name).strip()
     # Directory traversal (..), absolute path va relative path sakrashlarini oldini olish
-    cleaned = os.path.basename(cleaned)
+    cleaned = os.path.basename(name)
+    # Windows/Linux tizimlari uchun taqiqlangan belgilar
+    cleaned = re.sub(r'[\\/*?:"<>|]', "", cleaned).strip()
     cleaned = cleaned.replace("..", "").replace("/", "").replace("\\", "").strip()
     return cleaned if cleaned else "Video"
 
@@ -223,7 +226,9 @@ def get_uzmovi_info(url, retries=3):
             title_clean = sanitize_filename(title)
             folder_name = title_clean
 
-            iframe_match = re.search(r'src="(https://uzdown\.[a-zA-Z0-9.-]+/embed/[^"]+)"', html)
+            iframe_match = re.search(r'src=["\']?(https://[a-zA-Z0-9.-]*uzdown[a-zA-Z0-9.-]*/embed/[^"\'\s>]+)', html)
+            if not iframe_match:
+                iframe_match = re.search(r'src=["\']?(https://[a-zA-Z0-9.-]+/embed/[^"\'\s>]+)', html)
             if not iframe_match:
                 return url, None, "Iframe topilmadi."
             
@@ -236,7 +241,9 @@ def get_uzmovi_info(url, retries=3):
             req2 = urllib.request.Request(iframe_url, headers={'User-Agent': 'Mozilla/5.0'})
             iframe_html = urllib.request.urlopen(req2, timeout=10).read().decode('utf-8')
 
-            m3u8_match = re.search(r"file:\s*['\"]([^'\"]+)['\"]", iframe_html)
+            m3u8_match = re.search(r"file:\s*['\"]([^'\"]+)['\"]", iframe_html) or \
+                         re.search(r'src=["\']([^"\']+\.m3u8[^"\']*)["\']', iframe_html) or \
+                         re.search(r"file:\s*['\"]?([^'\"\s]+\.m3u8[^\s'\"<>]*)", iframe_html)
             if not m3u8_match:
                 return url, None, "m3u8 manba ssilkasi topilmadi."
 

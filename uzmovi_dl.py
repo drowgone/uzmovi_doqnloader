@@ -93,7 +93,10 @@ if not check_dependencies():
         elif IS_WINDOWS:
             print(" -> pip install rich questionary yt-dlp")
         else:
-            print(" -> sudo apt install python3-rich python3-questionary yt-dlp")
+            print(" -> Ubuntu/Debian: sudo apt install python3-rich python3-questionary yt-dlp")
+            print(" -> Arch Linux:    sudo pacman -S python-rich python-questionary yt-dlp")
+            print(" -> Fedora:        sudo dnf install python3-rich python3-questionary yt-dlp")
+            print(" -> openSUSE:      sudo zypper install python3-rich python3-questionary yt-dlp")
             print(" Yoki: pip install rich questionary yt-dlp")
         print("-" * 50)
         sys.exit(1)

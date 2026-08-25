@@ -143,10 +143,10 @@ def save_config(download_dir):
 
 def sanitize_filename(name):
     """Filename yoki folder nomidan xavfli belgilarni olib tashlash"""
-    # Windows/Linux tizimlari uchun taqiqlangan belgilar
-    cleaned = re.sub(r'[\\/*?:"<>|]', "", name).strip()
     # Directory traversal (..), absolute path va relative path sakrashlarini oldini olish
-    cleaned = os.path.basename(cleaned)
+    cleaned = os.path.basename(name.replace("\\", "/"))
+    # Windows/Linux tizimlari uchun taqiqlangan belgilar
+    cleaned = re.sub(r'[\\/*?:"<>|]', "", cleaned).strip()
     cleaned = cleaned.replace("..", "").replace("/", "").replace("\\", "").strip()
     return cleaned if cleaned else "Video"
 

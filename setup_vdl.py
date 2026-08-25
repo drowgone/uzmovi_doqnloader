@@ -121,7 +121,10 @@ def main():
         elif is_termux():
             print("    -> O'rnating: pkg install ffmpeg")
         else:
-            print("    -> O'rnating: sudo apt install ffmpeg")
+            print("    -> Ubuntu/Debian:  sudo apt install ffmpeg")
+            print("    -> Arch Linux:     sudo pacman -S ffmpeg")
+            print("    -> Fedora:         sudo dnf install ffmpeg")
+            print("    -> openSUSE:       sudo zypper install ffmpeg")
     print("")
 
     # 3. Setup Global Command and Chrome Bridge

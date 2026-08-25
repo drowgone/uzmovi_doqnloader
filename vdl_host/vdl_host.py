@@ -77,7 +77,7 @@ def main():
                         terminals = [
                             ('gnome-terminal', ['gnome-terminal', '--app-id', 'org.gnome.Terminal', '--tab', '--active', '--', sys.executable, opener_path, url]),
                             ('konsole', ['konsole', '--new-tab', '-e', sys.executable, opener_path, url]),
-                            ('xfce4-terminal', ['xfce4-terminal', '--tab', '-e', f'{sys.executable} "{opener_path}" "{url}"']),
+                            ('xfce4-terminal', ['xfce4-terminal', '--tab', '-x', sys.executable, opener_path, url]),
                             ('mate-terminal', ['mate-terminal', '--', sys.executable, opener_path, url]),
                             ('kitty', ['kitty', '--', sys.executable, opener_path, url]),
                             ('alacritty', ['alacritty', '-e', sys.executable, opener_path, url]),

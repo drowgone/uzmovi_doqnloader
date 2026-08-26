@@ -191,7 +191,7 @@ Brauzerda o'ng tugmani bosish orqali yuklashni xohlasangiz:
 2. [white]Developer mode[/white] ni yoqing va [white]Load unpacked[/white] tugmasini bosing.
 3. Papkani tanlang: [yellow]{os.path.dirname(os.path.realpath(__file__))}/vdl_extension[/yellow]
 4. Kengaytmaning [white]ID[/white] raqamini nusxalang.
-  5. [yellow]{os.path.dirname(os.path.realpath(__file__))}/vdl_host/com.chrome_ex.vdl.json[/yellow]
+5. [yellow]{os.path.dirname(os.path.realpath(__file__))}/vdl_host/com.chrome_ex.vdl.json[/yellow]
    faylini ochib, [white]PLACEHOLDER_ID[/white] o'rniga ID ni qo'ying.
 6. Sozlamalardan [green]Kino'ni qayta o'rnating[/green] (Install).
 """
@@ -223,7 +223,7 @@ def get_uzmovi_info(url, retries=3):
             title_clean = sanitize_filename(title)
             folder_name = title_clean
 
-            iframe_match = re.search(r'src="(https://uzdown\.[a-zA-Z0-9.-]+/embed/[^"]+)"', html)
+            iframe_match = re.search(r'src=["\'](https?://[a-zA-Z0-9.-]+/embed/[^"\']+)["\']', html)
             if not iframe_match:
                 return url, None, "Iframe topilmadi."
             
